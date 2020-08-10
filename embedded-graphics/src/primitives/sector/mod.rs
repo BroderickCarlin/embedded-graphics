@@ -4,7 +4,10 @@ mod points;
 mod styled;
 
 use crate::{
-    geometry::{Angle, Dimensions, Point, Real, Size, Trigonometry},
+    geometry::{
+        angle_consts::{ANGLE_180DEG, ANGLE_360DEG, ANGLE_90DEG},
+        Angle, Dimensions, Point, Real, Size, Trigonometry,
+    },
     primitives::{
         arc::PlaneSector, line::Line, Circle, ContainsPoint, OffsetOutline, Primitive, Rectangle,
     },
@@ -120,7 +123,7 @@ impl Sector {
 
     /// Return the center point of the sector
     pub fn center(&self) -> Point {
-        self.bounding_box().center()
+        Rectangle::new(self.top_left, Size::new_equal(self.diameter)).center()
     }
 
     /// Return the end angle of the sector
@@ -170,7 +173,39 @@ impl ContainsPoint for Sector {
 
 impl Dimensions for Sector {
     fn bounding_box(&self) -> Rectangle {
-        Rectangle::new(self.top_left, Size::new_equal(self.diameter))
+        let bb = Rectangle::new(self.top_left, Size::new_equal(self.diameter));
+
+        let start = self.angle_start;
+        let end = self.angle_end();
+
+        let p1 = self.line_from_angle(self.angle_start).end;
+        let p2 = self.line_from_angle(self.angle_end()).end;
+        let center = self.center();
+
+        let quadrants = [
+            ANGLE_90DEG,
+            ANGLE_180DEG,
+            ANGLE_360DEG,
+            ANGLE_180DEG + ANGLE_90DEG,
+        ];
+
+        let quadrants_between = quadrants.iter().filter_map(|a| {
+            if *a > start && *a < end {
+                Some(self.line_from_angle(*a).end)
+            } else {
+                None
+            }
+        });
+
+        let (min, max) = [p1, p2, center]
+            .iter()
+            .copied()
+            .chain(quadrants_between)
+            .fold((bb.top_left, bb.top_left + bb.size), |(tl, br), point| {
+                (tl.component_max(point), br.component_min(point))
+            });
+
+        Rectangle::with_corners(min, max)
     }
 }
 
