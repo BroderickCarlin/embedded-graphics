@@ -190,7 +190,7 @@ impl Dimensions for Sector {
         ];
 
         let quadrants_between = quadrants.iter().filter_map(|a| {
-            if *a > start && *a < end {
+            if *a >= start && *a <= end {
                 Some(self.line_from_angle(*a).end)
             } else {
                 None
@@ -201,9 +201,10 @@ impl Dimensions for Sector {
             .iter()
             .copied()
             .chain(quadrants_between)
-            .fold((bb.top_left, bb.top_left + bb.size), |(tl, br), point| {
-                (tl.component_max(point), br.component_min(point))
-            });
+            .fold(
+                (bb.top_left, bb.bottom_right().unwrap()),
+                |(tl, br), point| (tl.component_max(point), br.component_min(point)),
+            );
 
         Rectangle::with_corners(min, max)
     }
@@ -256,17 +257,7 @@ mod tests {
 
         assert_eq!(
             sector.bounding_box(),
-            Rectangle::new(Point::new(-15, -15), Size::new(10, 10))
-        );
-    }
-
-    #[test]
-    fn dimensions() {
-        let sector = Sector::new(Point::new(5, 15), 10, 0.0.deg(), 90.0.deg());
-
-        assert_eq!(
-            sector.bounding_box(),
-            Rectangle::new(Point::new(5, 15), Size::new(10, 10))
+            Rectangle::new(Point::new(-11, -15), Size::new(5, 5))
         );
     }
 
@@ -336,6 +327,63 @@ mod tests {
         assert_eq!(
             sector.offset(-3),
             Sector::with_center(center, 0, 0.0.deg(), 90.0.deg())
+        );
+    }
+
+    #[test]
+    fn bounding_box() {
+        // Full circle
+        assert_eq!(
+            Sector::new(Point::zero(), 40, 0.0.deg(), 360.0.deg()).bounding_box(),
+            Rectangle::new(Point::new(0, 0), Size::new(39, 39)),
+            "full circle"
+        );
+
+        // Quadrants
+        //
+        // 3 | 0
+        // -----
+        // 2 | 1
+        assert_eq!(
+            Sector::new(Point::zero(), 40, 0.0.deg(), 90.0.deg()).bounding_box(),
+            Rectangle::new(Point::new(19, 0), Size::new(20, 20)),
+            "quadrant 0"
+        );
+        assert_eq!(
+            Sector::new(Point::zero(), 40, (-90.0).deg(), 90.0.deg()).bounding_box(),
+            Rectangle::new(Point::new(19, 19), Size::new(20, 20)),
+            "quadrant 1"
+        );
+        assert_eq!(
+            Sector::new(Point::zero(), 40, (-180.0).deg(), 90.0.deg()).bounding_box(),
+            Rectangle::new(Point::new(0, 19), Size::new(20, 20)),
+            "quadrant 2"
+        );
+        assert_eq!(
+            Sector::new(Point::zero(), 40, (-270.0).deg(), 90.0.deg()).bounding_box(),
+            Rectangle::new(Point::new(0, 0), Size::new(20, 20)),
+            "quadrant 3"
+        );
+
+        // Negative coordinates
+        assert_eq!(
+            Sector::new(Point::new(-20, -35), 40, (-90.0).deg(), 45.0.deg()).bounding_box(),
+            Rectangle::new(Point::new(-1, -16), Size::new(14, 20)),
+            "negative coordinates"
+        );
+
+        // Less than one quadrant
+        assert_eq!(
+            Sector::new(Point::zero(), 40, 10.0.deg(), 15.0.deg()).bounding_box(),
+            Rectangle::new(Point::new(19, 11), Size::new(20, 9)),
+            "smaller than 90 degrees"
+        );
+
+        // Three quadrants
+        assert_eq!(
+            Sector::new(Point::zero(), 40, 15.0.deg(), 200.0.deg()).bounding_box(),
+            Rectangle::new(Point::new(0, 0), Size::new(38, 31)),
+            "larger than 180 degrees"
         );
     }
 }
